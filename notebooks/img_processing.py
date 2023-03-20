@@ -1,10 +1,10 @@
 from typing import *
 import warnings
-import os, glob, time
-from datetime import timedelta
+import os, glob
 import math
 import numpy as np
 import pandas as pd
+from IPython.display import display
 
 import cv2 as cv
 
@@ -31,7 +31,14 @@ from skimage import filters, exposure
 #    rgb2hsv                  # 3.2. RGB to HSV
 #)
 
-from pepper_commons import create_if_not_exist, for_all
+from pepper_commons import (
+    create_if_not_exist,
+    for_all,
+    get_file_size,
+    format_iB,
+    get_start_time,
+    print_time_perf
+)
 
 
 """ Dir scanning
@@ -1192,10 +1199,10 @@ def get_fast_kpts(gray_imx):
         # nonmaxSuppression=True
     )
     # Find the keypoints
-    return  np.array(fast.detect(image=gray_imx, mask=None))
+    return np.array(fast.detect(image=gray_imx, mask=None))
 
 
-def fast_all(gray_imxs):
+def ocv_fast_all(gray_imxs):
     return for_all(get_fast_kpts, gray_imxs) #, const_kwargs={'descriptor_size': ...})
 
 
@@ -1367,12 +1374,58 @@ def ocv_orb_all(gray_imxs):
 """ Data assembly and persistency
 """
 
+## KO : NE FONCTIONNE PAS
+def image_desc_dtypes_v2(keypoints, descriptors=None):
+    # deprecated
+    # determine dtypes for each column if not specified
+    # to extract only dtypes : np.dtype(image_desc_dtypes(keypoints, descriptors))
+    dtypes = []
+    dtypes.append(("id", "O"))
+    for i in range(keypoints.shape[1]):
+        dtype = str(keypoints.dtype)
+        dtypes.append((f"kp_{i}", dtype))
+    if descriptors is not None:
+        for i in range(descriptors.shape[1]):
+            dtype = str(descriptors.dtype)
+            dtypes.append((f"desc_{i}", dtype))
+    return dtypes
+
+## KO : NE FONCTIONNE PAS
+def image_desc_hstack_v2(id, keypoints, descriptors=None, dtypes=None):
+    # deprecated
+    h = keypoints.shape[0]
+    if h == 0:
+        return None
+    if dtypes is None:
+        dtypes = image_desc_dtypes_v2(keypoints, descriptors)
+    id_rep = np.full((h, 1), id) #, dtype=dtypes[0])
+    #id_rep = np.empty((h, 1), dtype=dtypes[0])
+    #id_rep[:, 0] = id
+    if descriptors is None:
+        # id_rep = id_rep.astype(dtypes[0])
+        #keypoints = keypoints.astype(dtypes[1:])
+        print(np.dtype(dtypes))
+        desc_hstack = np.hstack([id_rep, keypoints])
+        desc_hstack = desc_hstack.astype(dtypes)
+        print(desc_hstack.dtype)
+        return desc_hstack
+    else:
+        # id_rep = id_rep.astype(dtypes[0])
+        #keypoints = keypoints.astype(dtypes[1:keypoints.shape[1]+1])
+        #descriptors = descriptors.astype(dtypes[keypoints.shape[1]+1:])
+        print(np.dtype(dtypes))
+        desc_hstack = np.hstack([id_rep, keypoints, descriptors])
+        display(desc_hstack[0])
+        desc_hstack = desc_hstack.astype(dtypes)
+        print(desc_hstack.dtype)
+        return desc_hstack
+
 
 # réunion des tableaux en un seul,
 # avec index de l'image en tête,
 # puis coordonnées et descripteur des points d'intérêt et descripteur
-
-def image_desc_hstack(id, keypoints, descriptors=None):
+def image_desc_hstack_v1(id, keypoints, descriptors=None):
+    # deprecated
     h = keypoints.shape[0]
     if h == 0:
         return None
@@ -1383,37 +1436,78 @@ def image_desc_hstack(id, keypoints, descriptors=None):
         return np.hstack([id_rep, keypoints, descriptors])
 
 
-def images_descriptions_array(ids, keypoints, descriptors=None):
+def images_descriptions_array_v1(ids, keypoints, descriptors=None):
+    # deprecated
     if descriptors is None:
         return np.vstack([
-            image_desc_hstack(i, k)
+            image_desc_hstack_v1(i, k)
             for i, k in zip(ids, keypoints)
             if k is not None and k.shape[0] > 0
         ])
     else:
         return np.vstack([
-            image_desc_hstack(i, k, d)
+            image_desc_hstack_v1(i, k, d)
             for i, k, d in zip(ids, keypoints, descriptors)
             if k is not None and k.shape[0] > 0
         ])
 
 
-def images_descriptions_data(ids, keypoints, descriptors=None):
-    descs_array = images_descriptions_array(ids, keypoints, descriptors)
-    data = pd.DataFrame.from_records(descs_array)
+def images_descriptions_data_v1(ids, keypoints, descriptors=None):
+    # deprecated : use images_descriptions_data instead
+    descs_array = images_descriptions_array_v1(ids, keypoints, descriptors)
+    # just never redo this on a big one : pd.DataFrame.from_records(descs_array)
+    data = pd.DataFrame(descs_array)
     cols = ['id', 'y', 'x']
     if descriptors is not None:
         desc_len = descriptors[0].shape[1]
         cols += [str(i) for i in range(desc_len)]
     data.columns = cols
     data.set_index('id', inplace=True)
+    data[data.columns[:2]] = data[data.columns[:2]].astype(keypoints.dtype)
+    data[data.columns[2:]] = data[data.columns[2:]].astype(descriptors.dtype)
     return data
 
 
-def save_desc_data(data, dataname, root_dir=None):
+def get_id_rep_v1(ids, kpts):
+    # deprecated : plus compliquée et moins performante et surtout shape (n,)
+    return np.vstack([
+        np.full((kpt.shape[0], 1), id)
+        for id, kpt in zip(ids, kpts)
+        if kpt is not None and kpt.shape[0] > 0
+    ])
+
+
+def get_id_rep(ids, kpts):
+    return np.concatenate([
+        np.repeat(id, kpt.shape[0])
+        for id, kpt in zip(ids, kpts)
+    ])
+
+
+def images_descriptions_data(ids, kpts, descs=None):
+    id_rep = get_id_rep(ids, kpts)
+    kpts_stacked = np.vstack([kpt for kpt in kpts if kpt is not None])
+    kpts_data = pd.DataFrame(kpts_stacked, index=id_rep).astype(dtype=int)
+    kpts_data.index.names = ['id']
+    kpts_data.columns = ['y', 'x']
+    if descs is None:
+        return kpts_data
+    else:
+        descs_stacked = np.vstack([desc for desc in descs if desc is not None])
+        descs_data = pd.DataFrame(descs_stacked, index=id_rep)
+        descs_data.index.names = ['id']
+        descs_data.columns = [str(i) for i in range(descs[0].shape[1])]
+        return pd.concat([kpts_data, descs_data], axis=1)
+
+
+def save_desc_data(data, data_name, root_dir=None):
     if root_dir is not None:
         create_if_not_exist(root_dir)
-    data.to_parquet(f"{root_dir}{dataname}.parquet")
+    file_path = f"{root_dir}{data_name}.parquet"
+    data.to_parquet(file_path)
+    file_size = get_file_size(file_path)
+    print(f"{data_name} {data.shape}")
+    print(*format_iB(file_size), "parquet file saved") 
 
 
 def load_desc_data(dataname, root_dir=None):
@@ -1472,15 +1566,4 @@ def extract_info_data(root_dir, images_path):
     data.to_csv(info_data_path, encoding='utf8')
 
 
-""" Performances
-"""
 
-def get_start_time():
-    return time.time()
-
-
-def print_time_perf(what, where, start_time):
-    dt = time.time() - start_time
-    print(what)
-    print(where)
-    print(f"in {timedelta(seconds=dt)} seconds")

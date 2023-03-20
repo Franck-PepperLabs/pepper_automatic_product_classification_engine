@@ -1,4 +1,6 @@
-import os
+import os, time
+from sys import getsizeof
+from datetime import timedelta
 from typing import *
 from itertools import zip_longest
 from IPython.display import display
@@ -6,6 +8,42 @@ from IPython.display import display
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+
+""" Pretty printing
+"""
+
+
+def bold(s):
+    return '\033[1m' + str(s) + '\033[0m'
+
+
+def italic(s):
+    return '\033[3m' + str(s) + '\033[0m'
+
+
+def cyan(s):
+    return '\033[36m' + str(s) + '\033[0m'
+
+
+def magenta(s):
+    return '\033[35m' + str(s) + '\033[0m'
+
+
+def red(s):
+    return '\033[31m' + str(s) + '\033[0m'
+
+
+def green(s):
+    return '\033[32m' + str(s) + '\033[0m'
+
+
+def print_title(txt):
+    print(bold(magenta('\n' + txt.upper())))
+
+
+def print_subtitle(txt):
+    print(bold(cyan('\n' + txt)))
 
 
 def discrete_stats(data, name=None):
@@ -195,3 +233,84 @@ def for_all(
     # Returns nothing if f is clearly a procedure (never returns anything)
     if not all([result is None for result in results]):
         return results
+
+
+
+""" Memory assets
+"""
+
+
+def format_iB(n_bytes):
+    """AI is creating summary for format_iB
+
+    Args:
+        n_bytes ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    KiB = 2**10
+    MiB = KiB * KiB
+    GiB = MiB * KiB
+    TiB = GiB * KiB
+    if n_bytes < KiB:
+        return n_bytes, 'iB'
+    elif n_bytes < MiB:
+        return round(n_bytes / KiB, 3), 'KiB'
+    elif n_bytes < GiB:
+        return round(n_bytes / MiB, 3), 'MiB'
+    elif n_bytes < TiB:
+        return round(n_bytes / GiB, 3), 'GiB'
+    else:
+        return round(n_bytes / TiB), 'TiB'
+
+
+def print_memory_usage(data):
+    mem_usage = data.memory_usage()
+    print("mem_usage :", *format_iB(mem_usage.sum()))
+    # print("getsizeof :", *format_iB(getsizeof(data)))
+    print("__sizeof__:", *format_iB(data.__sizeof__()))
+
+
+def get_file_size(file_path):
+    return os.path.getsize(file_path)
+
+
+def print_file_size(file_path):
+    file_size = get_file_size(file_path)
+    print("file size:", *format_iB(file_size))
+
+
+""" Performances
+"""
+
+
+def get_start_time():
+    return time.time()
+
+
+def pretty_timedelta_str(dt, n_significant=3):
+    dt = timedelta(seconds=dt)
+    d = dt.days
+    h = dt.seconds // 3600
+    m = (dt.seconds // 60) % 60
+    s = dt.seconds % 60
+    ms = dt.microseconds // 1000
+    mus = dt.microseconds % 1000
+    vals = [d, h, m, s, ms, mus]
+    units = ['d', 'h', 'm', 's', 'ms', 'mus']
+    first = next(i for i, j in enumerate(vals) if j) 
+    vals = vals[first:first+n_significant]
+    units = units[first:first+n_significant]
+    units_str = [f"{v} {u}" for v, u in zip(vals, units) if v > 0]
+    return ", ".join(units_str)
+
+
+def print_time_perf(what, where, start_time):
+    dt = time.time() - start_time
+    if what:
+        print(what)
+    if where:
+        print(where)
+    if start_time:
+        print(f"in {pretty_timedelta_str(dt)}")

@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 from IPython.display import display
 
 
+def count_tag_occurrences(series, tag):
+    return series.str.count(tag)
+
+
 def get_word_count(sentences):
     return sentences.apply(len).rename(sentences.name + '_wc')
 

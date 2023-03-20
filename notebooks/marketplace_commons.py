@@ -43,20 +43,40 @@ def full_show_sample(series, n=5):
 
 
 def get_product_category_branches() -> pd.DataFrame:
+    start_tag = '\\["'
+    end_tag = '"\\]'
+    sep_tag = " >> "
     cats = (
-        get_raw_data('product_category_tree')
-        .str.replace('\["|"\]', '', regex=True)
-        .str.split(' >> ', regex=True, expand=True)
+        get_raw_data("product_category_tree")
+        .str.replace(f"{start_tag}|{end_tag}", "", regex=True)
+        .str.split(sep_tag, regex=True, expand=True)
     )
-    cats.columns = [f'level_{i}' for i in cats.columns]
+    cats.index.name = "id"
+    cats.columns = [f"level_{i}" for i in cats.columns]
     return cats
 
 
-"""tokenized_branches = (
-    product_category_tree
-    .str.replace('\["|"\]', '', regex=True)
-    .str.split(' >> ', regex=True, expand=True)
-)"""
+def get_product_categories(depth=1):
+    cats = get_product_category_branches()
+    cats = cats[cats.columns[:depth]]
+    return cats.astype("category")
+
+
+def get_class_labels():
+    cats = get_product_categories()
+    cats = cats[cats.columns[0]]
+    return cats.cat.codes.rename("class")
+
+
+def get_class_names():
+    cats = get_product_categories()
+    return cats[cats.columns[0]].astype(str)
+
+
+def get_class_label_name_map():
+    return dict(enumerate(
+        get_product_categories().level_0.cat.categories
+    ))
 
 
 def get_raw_tokenized_product_names():
