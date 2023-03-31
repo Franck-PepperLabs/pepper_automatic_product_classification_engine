@@ -37,14 +37,35 @@ from pepper_utils import (
     get_file_size,
     format_iB,
     get_start_time,
-    print_time_perf
+    print_time_perf,
+    save_and_show
 )
-
 
 """ Dir scanning
 """
 
-def _get_filenames_scandir(root_dir, ext=None, recursive=False):
+
+def _get_filenames_scandir(
+    root_dir: str,
+    ext: Optional[str] = None,
+    recursive: bool = False
+) -> List[str]:
+    """
+    Returns a list of filenames in the specified directory.
+
+    Args:
+        root_dir (str):
+            The root directory to search for filenames in.
+        ext (str, optional):
+            The extension to filter the filenames by.
+            Defaults to None.
+        recursive (bool, optional):
+            Whether or not to search for filenames recursively.
+            Defaults to False.
+
+    Returns:
+        List[str]: A list of filenames found in the directory.
+    """
     filenames = []
     with os.scandir(root_dir) as it:
         for entry in it:
@@ -66,7 +87,29 @@ def _get_filenames_scandir(root_dir, ext=None, recursive=False):
     return filenames
 
 
-def _get_filenames_glob(root_dir, ext=None, recursive=False):
+def _get_filenames_glob(
+    root_dir: str,
+    ext: Optional[str] = None,
+    recursive: bool = False
+) -> List[str]:
+    """
+    Returns a list of filenames in the specified directory
+    using glob pattern matching.
+
+    Args:
+        root_dir (str):
+            The root directory to search for filenames in.
+        ext (str, optional):
+            The extension to filter the filenames by.
+            Defaults to None, which returns all files.
+        recursive (bool, optional):
+            Whether or not to search for filenames recursively.
+            Defaults to False.
+
+    Returns:
+        List[str]:
+            A list of filenames found in the directory.
+    """
     ext = "*" if ext is None else ext
     if recursive:
         filenames = glob.glob(f"**/*.{ext}", root_dir=root_dir, recursive=True)
@@ -76,13 +119,70 @@ def _get_filenames_glob(root_dir, ext=None, recursive=False):
     return filenames
 
 
-def get_filenames(root_dir, ext=None, recursive=False, meth='glob'):
+def get_filenames(
+    root_dir: str,
+    ext: Optional[str] = None,
+    recursive: bool = False,
+    meth: str = 'glob'
+) -> List[str]:
+    """
+    Returns a list of filenames in the specified directory
+    using the specified method.
+
+    Args:
+        root_dir (str):
+            The root directory to search for filenames in.
+        ext (str, optional):
+            The extension to filter the filenames by.
+            Defaults to None, which returns all files.
+        recursive (bool, optional):
+            Whether or not to search for filenames recursively.
+            Defaults to False.
+        meth (str, optional):
+            The method to use for finding filenames.
+            Can be either 'glob' or 'scandir'.
+            Defaults to 'glob'.
+
+    Returns:
+        List[str]:
+            A list of filenames found in the directory.
+    """
     if meth == 'scandir':
         return _get_filenames_scandir(root_dir, ext, recursive)
     return _get_filenames_glob(root_dir, ext, recursive)
 
 
-def get_file_names_and_ids(root_dir, ext=None, recursive=False, meth='glob'):
+def get_file_names_and_ids(
+    root_dir: str,
+    ext: Optional[str] = None,
+    recursive: bool = False,
+    meth: str = 'glob'
+) -> Tuple[List[str], List[str]]:
+    """
+    Returns a tuple containing two lists:
+    the list of filenames found in the specified directory,
+    and the list of corresponding file ids.
+
+    Args:
+        root_dir (str):
+            The root directory to search for filenames in.
+        ext (str, optional):
+            The extension to filter the filenames by.
+            Defaults to None, which returns all files.
+        recursive (bool, optional):
+            Whether or not to search for filenames recursively.
+            Defaults to False.
+        meth (str, optional):
+            The method to use for finding filenames.
+            Can be either 'glob' or 'scandir'.
+            Defaults to 'glob'.
+
+    Returns:
+        Tuple[List[str], List[str]]:
+            A tuple containing two lists:
+            the list of filenames found in the directory,
+            and the list of corresponding file ids.
+    """
     filenames = get_filenames(root_dir, ext, recursive, meth)
     fileids = [filename[-36:-4] for filename in filenames]
     return filenames, fileids
@@ -91,38 +191,115 @@ def get_file_names_and_ids(root_dir, ext=None, recursive=False, meth='glob'):
 """ Convert
 """
 
+# def img_to_imx(img):
+def img_to_imx(im: Union[np.ndarray, pil.Image]) -> np.ndarray:
+    """
+    Convert a numpy array or a PIL Image to a numpy array.
 
-def img_to_imx(img):
-    if isinstance(img, np.ndarray):
-        return img
-    return np.array(img)
+    Args:
+        img (Union[np.ndarray, pil.Image]):
+            The image to convert.
+
+    Returns:
+        np.ndarray:
+            The converted image as a numpy array.
+    """
+    if isinstance(im, np.ndarray):
+        return im
+    return np.array(im)
 
 
-def imx_to_img(imx):
-    if isinstance(imx, pil.Image):
-        return imx
-    return pil.fromarray(imx)
+# def imx_to_img(imx):
+def imx_to_img(im: Union[np.ndarray, pil.Image]) -> pil.Image:
+    """
+    Convert a numpy array to a PIL Image.
+
+    Args:
+        im (Union[np.ndarray, pil.Image]):
+            The numpy array to convert.
+
+    Returns:
+        PIL.Image:
+            The converted image as a PIL Image.
+    """
+    if isinstance(im, pil.Image):
+        return im
+    return pil.fromarray(im)
 
 
 """ Image loading
 """
 
 
-def _load_image_mpi_imread(filename, root_dir=None):
+def _load_image_mpi_imread(
+    filename: str,
+    root_dir: Optional[str] = None
+) -> np.ndarray:
+    """
+    Loads an image file using `matplotlib.image.imread`
+    and returns it as a NumPy array.
+
+    Args:
+        filename (str):
+            The name of the file to load.
+        root_dir (str, optional):
+            The root directory to use when loading the file. Defaults to None.
+
+    Returns:
+        np.ndarray:
+            The loaded image as a NumPy array.
+    """
     filepath = filename
     if root_dir is not None:
         filepath = root_dir + filename
     return mpi.imread(filepath)
 
 
-def _load_image_ocv_imread(filename, root_dir=None):
+def _load_image_ocv_imread(
+    filename: str,
+    root_dir: Optional[str] = None
+) -> np.ndarray:
+    """
+    Loads an image file using OpenCV's `cv2.imread`
+    and returns it as a NumPy array.
+
+    Args:
+        filename (str):
+            The name of the file to load.
+        root_dir (str, optional):
+            The root directory to use when loading the file.
+            Defaults to None.
+
+    Returns:
+        np.ndarray:
+            The loaded image as a NumPy array.
+    """
     filepath = filename
     if root_dir is not None:
         filepath = root_dir + filename
     return cv.imread(filepath)
 
 
-def _load_image_pil_open(filename, root_dir=None):
+def _load_image_pil_open(
+    filename: str,
+    root_dir: Optional[str] = None
+) -> Tuple[np.ndarray, pil.Image]:
+    """
+    Loads an image file using PIL's `Image.open`
+    and returns it as both a NumPy array and a PIL Image object.
+
+    Args:
+        filename (str):
+            The name of the file to load.
+        root_dir (str, optional):
+            The root directory to use when loading the file.
+            Defaults to None.
+
+    Returns:
+        Tuple[np.ndarray, pil.Image]:
+            A tuple containing the loaded image
+            as a NumPy array and a PIL Image object.
+    """
     filepath = filename
     if root_dir is not None:
         filepath = root_dir + filename
@@ -131,7 +308,30 @@ def _load_image_pil_open(filename, root_dir=None):
     return imx, img
 
 
-def load_image(filename, root_dir=None, meth='mpi'):
+def load_image(
+    filename: str,
+    root_dir: Optional[str] = None,
+    meth: str = 'mpi'
+) -> Union[np.ndarray, Tuple[np.ndarray, pil.Image]]:
+    """
+    Loads an image file using one of three possible methods and returns
+    it as a NumPy array or a tuple of a NumPy array and a PIL Image object.
+
+    Args:
+        filename (str):
+            The name of the file to load.
+        root_dir (str, optional):
+            The root directory to use when loading the file.
+            Defaults to None.
+        meth (str, optional):
+            The method to use when loading the file.
+            Possible values are 'mpi' (default), 'ocv', and 'pil'.
+
+    Returns:
+        Union[np.ndarray, Tuple[np.ndarray, pil.Image]]:
+            The loaded image as a NumPy array or a tuple
+            of a NumPy array and a PIL Image object.
+    """
     if meth == 'mpi':
         return _load_image_mpi_imread(filename, root_dir)
     if meth == 'ocv':
@@ -143,44 +343,158 @@ def load_image(filename, root_dir=None, meth='mpi'):
 """ Save
 """
 
-def is_float_0_1(imx):
+
+def is_float_0_1(imx: np.ndarray) -> bool:
+    """Check if the input array contains only float values between 0 and 1.
+
+    Args:
+        imx (np.ndarray):
+            The input array to check.
+
+    Returns:
+        bool:
+            True if the array only contains float values between 0 and 1,
+            False otherwise.
+    """
     return 0.0 <= np.min(imx) <= np.max(imx) <= 1.0
 
 
-def from_float_0_1_to_int_0_255(imx):
+def from_float_0_1_to_int_0_255(imx: np.ndarray) -> np.ndarray:
+    """Convert an input array containing float values between 0 and 1
+    to an array containing integers between 0 and 255.
+    
+    Args:
+        imx (np.ndarray):
+            The input array to convert.
+
+    Returns:
+        np.ndarray:
+            The converted array.
+    """
     return (imx * 255).astype(np.uint8)
 
 
-def _pil_save(img, filename, root_dir=None):
+def _pil_save(
+    img: pil.Image,
+    filename: str,
+    root_dir: Optional[str] = None
+) -> None:
+    """Save a PIL Image to disk.
+
+    Args:
+        img (PIL.Image):
+            The PIL Image to save.
+        filename (str):
+            The filename to use when saving the image.
+        root_dir (str, optional):
+            The root directory where the image should be saved.
+            Defaults to None.
+    """
     filepath = filename
     if root_dir is not None:
         filepath = root_dir + filename
     img.save(filepath)
 
 
-# TODO v1050 : savez_compressed permet de compresser dans un npz, unique, partagé par tous les tableaux
-def save_hsv_as_npy(imx, filename, root_dir=None):
+def save_hsv_as_npy(
+    imx: np.ndarray,
+    filename: str,
+    root_dir: Optional[str] = None
+) -> None:
+    """Save an HSV image as a NumPy array to disk.
+
+    Args:
+        imx (numpy.ndarray):
+            The input array to save.
+        filename (str):
+            The filename to use when saving the array.
+        root_dir (str, optional):
+            The root directory where the array should be saved. Defaults to None.
+    """
     filepath = filename
     if root_dir is not None:
         filepath = root_dir + filename
     np.save(filepath, imx)    
 
 
-def load_hsv_from_npy(imx, filename, root_dir=None):
+def load_hsv_from_npy(
+    filename: str,
+    root_dir: Optional[str] = None
+) -> np.ndarray:
+    """Load an array of the HSV values of an image from a .npy file.
+
+    Args:
+        filename (str):
+            The filename of the .npy file.
+        root_dir (Optional[str], optional):
+            The root directory where the file is located.
+            Defaults to None.
+
+    Returns:
+        np.ndarray:
+            The array of HSV values of the image.
+    """
     filepath = filename
     if root_dir is not None:
         filepath = root_dir + filename
     return np.load(filepath)
 
 
-def save_image(im, filename, root_dir=None, meth='pil'):
+def save_image(
+    im: Union[np.ndarray, pil.Image],
+    filename: str,
+    root_dir: Optional[str] = None,
+    meth: str = 'pil'
+) -> None:
+    """Save an image to a file.
+
+    Args:
+        im (Union[np.ndarray, pil.Image]):
+            The image to save.
+        filename (str):
+            The filename of the file to save the image to.
+        root_dir (Optional[str], optional):
+            The root directory where the file will be saved.
+            Defaults to None.
+        meth (str, optional):
+            The method to use to save the image.
+            Defaults to 'pil'.
+    """
     imx = img_to_imx(im)
     if is_float_0_1(imx):
         imx = from_float_0_1_to_int_0_255(imx)
-    _pil_save(imx_to_img(imx), filename, root_dir)
+    if meth == 'pil':
+        _pil_save(imx_to_img(imx), filename, root_dir)
+    elif meth == 'mpi':
+        mpi.imsave(os.path.join(root_dir, filename), imx)
+    elif meth == 'ocv':
+        cv.imwrite(os.path.join(root_dir, filename), imx)
 
 
-def save_all(ims, filenames, root_dir=None, meth='pil'):
+def save_all(
+    ims: List[np.ndarray],
+    filenames: List[str],
+    root_dir: Union[None, str] = None,
+    meth: str = 'pil'
+) -> None:
+    """
+    Saves a list of images to disk with the corresponding filenames.
+
+    Args:
+        ims (List[numpy.ndarray]):
+            A list of images represented as ndarrays.
+        filenames (List[str]):
+            A list of filenames corresponding to each image.
+        root_dir (Union[None, str], optional):
+            The root directory where the images will be saved.
+            Defaults to None.
+        meth (str, optional):
+            The method used to save the images.
+            Defaults to 'pil'.
+
+    Returns:
+        None
+    """
     if root_dir is not None:
         create_if_not_exist(root_dir)
     for_all(
@@ -193,17 +507,52 @@ def save_all(ims, filenames, root_dir=None, meth='pil'):
 """ Grayscale
 """
 
+def _to_gray_ski(
+    im: Union[np.ndarray, pil.Image]
+) -> np.ndarray:
+    """Convert the given image to grayscale using skimage.
 
-def _to_gray_ski(imx):
-    return ski.color.rgb2gray(img_to_imx(imx))
+    Args:
+        im (Union[numpy.ndarray, PIL.Image.Image]:
+            The image to convert.
+
+    Returns:
+        numpy.ndarray:
+            The converted grayscale image.
+    """
+    return ski.color.rgb2gray(img_to_imx(im))
 
 
-def _to_gray_pil(img):
-    return ImageOps.grayscale(imx_to_img(img))
+def _to_gray_pil(
+    im: Union[np.ndarray, pil.Image]
+) -> pil.Image:
+    """Convert the given image to grayscale using PIL.
+
+    Args:
+        im (Union[numpy.ndarray, PIL.Image.Image]:
+            The image to convert.
+
+    Returns:
+        PIL.Image.Image:
+            The converted grayscale image.
+    """
+    return ImageOps.grayscale(imx_to_img(im))
 
 
-def _to_gray_ocv(imx):
-    return cv.cvtColor(img_to_imx(imx), cv.COLOR_BGR2GRAY)
+def _to_gray_ocv(
+    im: Union[np.ndarray, pil.Image]
+) -> np.ndarray:
+    """Convert the given image to grayscale using OpenCV.
+
+    Args:
+        im (Union[numpy.ndarray, PIL.Image.Image]:
+            The image to convert.
+
+    Returns:
+        numpy.ndarray:
+            The converted grayscale image.
+    """
+    return cv.cvtColor(img_to_imx(im), cv.COLOR_BGR2GRAY)
 
 
 def to_gray(im, meth='ocv'):
@@ -230,8 +579,8 @@ def get_resize_ratio(imx):
     return 1_000 / math.sqrt(dx * dy)
 
 
-def _resize_ocv(imx, interpolation=cv.INTER_AREA):
-    imx = img_to_imx(imx)
+def _resize_ocv(im, interpolation=cv.INTER_AREA):
+    imx = img_to_imx(im)
     r = get_resize_ratio(imx)
     return cv.resize(imx, dsize=None, fx=r, fy=r, interpolation=interpolation)
 
@@ -302,7 +651,10 @@ def show_imxs_gallery(imxs, ids, cmap=None):
             ax[i].set_axis_off()        
 
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+
+    save_and_show(f"gallery_{len(ids)}", sub_dir="show_imxs_gallery")
+
 
 
 def advanced_show_imx(
@@ -1510,7 +1862,25 @@ def save_desc_data(data, data_name, root_dir=None):
     print(*format_iB(file_size), "parquet file saved") 
 
 
-def load_desc_data(dataname, root_dir=None):
+def load_desc_data(
+        dataname: str,
+        root_dir: Optional[str] = None
+) -> pd.DataFrame:
+    r"""Load the data with given dataname from the specified root directory.
+
+    Parameters
+    ----------
+    dataname : str
+        The name of the data to load (without file extension).
+    root_dir : str, optional
+        The path to the directory where the data is stored.
+        If None, the current working directory is used.
+
+    Returns
+    -------
+    pd.DataFrame
+        The loaded data as a pandas DataFrame.
+    """
     return pd.read_parquet(f"{root_dir}{dataname}.parquet")
 
 
