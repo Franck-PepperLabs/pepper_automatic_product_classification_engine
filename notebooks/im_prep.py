@@ -1,5 +1,6 @@
 from typing import *
-import warnings
+import time
+# import warnings
 import os, glob
 import math
 import numpy as np
@@ -36,7 +37,7 @@ from pepper_utils import (
     for_all,
     get_file_size,
     format_iB,
-    get_start_time,
+    # get_start_time, depr
     print_time_perf,
     save_and_show
 )
@@ -653,7 +654,7 @@ def show_imxs_gallery(imxs, ids, cmap=None):
     plt.tight_layout()
     #plt.show()
 
-    save_and_show(f"gallery_{len(ids)}", sub_dir="show_imxs_gallery")
+    save_and_show(f"gallery_{len(ids)}", sub_dir="im_prep")
 
 
 
@@ -693,6 +694,7 @@ def advanced_show_imx(
     tick_color = fg_color
     grid_color = grid_color if grid_color is not None else fg_color
 
+    fig = None
     if ax is None:
         fig, ax = plt.subplots(1, 1)
 
@@ -731,8 +733,11 @@ def advanced_show_imx(
     if title is not None:
         ax.set_title(title, color=text_color)
     
-    if ax is None:
-        plt.show()
+    if fig:
+        # plt.show()
+        if title is None:
+            title = "Jane DOE"
+        save_and_show(f"imx_{title.lower()}", sub_dir="im_prep")
 
 
 """ SKImage
@@ -791,7 +796,7 @@ def pipeline_step(
         output_state=None,
         block_slice=None
 ):    
-    start_time = get_start_time()
+    start_time = time.time()  # get_start_time()
 
     if input_subdir is None and input_cache is None:
         print("pipeline_step ERROR")
@@ -828,7 +833,7 @@ def pipeline_step(
     print_time_perf(
         what=f"{len(ids)} images {output_state} {block_slice}",
         where=f"to {output_dir}" if output_subdir else f"from {input_dir}",
-        start_time=start_time
+        time=time.time()-start_time
     )
 
     if extracted is None:
@@ -886,7 +891,10 @@ def imshow_rgb_to_hsv(rgb_imx, hsv_imx, ax=None):
 
     if fig is not None:
         fig.tight_layout()
-        plt.show()
+        # plt.show()
+        title = "Jane DOE"
+        save_and_show(f"rgb_to_hsv_{title.lower()}", sub_dir="im_prep")
+
 
 
 def show_thres_img_hist(imx, threshold, channel_name, ax=None):
@@ -913,7 +921,9 @@ def show_thres_img_hist(imx, threshold, channel_name, ax=None):
 
     if fig is not None:
         fig.tight_layout()
-        plt.show()
+        # plt.show()
+        title = "Jane DOE"
+        save_and_show(f"thres_img_hist_{title.lower()}", sub_dir="im_prep")
 
 
 """ Edges and lines (# SKI 4)
@@ -962,7 +972,9 @@ def imshow_canny_edge_maps(gray_imx, edge_maps, sigmas, ax=None):
 
     if fig is not None:
         fig.tight_layout()
-        plt.show() 
+        #plt.show()
+        title = "Jane DOE"
+        save_and_show(f"canny_edge_maps_{title.lower()}", sub_dir="im_prep")
 
 
 def get_canny_edge_maps(gray_imx, sigmas):
@@ -997,8 +1009,10 @@ def for_all_imshow_cannys(gray_imxs, edge_maps_s, sigmas):
         ],
         const_kwargs={'sigmas': sigmas}
     )
+
     fig.tight_layout()
-    plt.show()
+    title = "Jane DOE"
+    save_and_show(f"all_cannys_{title.lower()}", sub_dir="im_prep")
 
 
 """ SKI 4.13. Edge operators
@@ -1035,7 +1049,9 @@ def imshow_edge_detection(gray_imx, edge_maps, edge_meths, ax=None):
 
     if fig is not None:
         fig.tight_layout()
-        plt.show() 
+        # plt.show() 
+        title = "Jane DOE"
+        save_and_show(f"edge_detection_{title.lower()}", sub_dir="im_prep")
 
 
 def all_edge_meths(gray_imx, edge_meths):
@@ -1726,58 +1742,33 @@ def ocv_orb_all(gray_imxs):
 """ Data assembly and persistency
 """
 
-## KO : NE FONCTIONNE PAS
-def image_desc_dtypes_v2(keypoints, descriptors=None):
-    # deprecated
-    # determine dtypes for each column if not specified
-    # to extract only dtypes : np.dtype(image_desc_dtypes(keypoints, descriptors))
-    dtypes = []
-    dtypes.append(("id", "O"))
-    for i in range(keypoints.shape[1]):
-        dtype = str(keypoints.dtype)
-        dtypes.append((f"kp_{i}", dtype))
-    if descriptors is not None:
-        for i in range(descriptors.shape[1]):
-            dtype = str(descriptors.dtype)
-            dtypes.append((f"desc_{i}", dtype))
-    return dtypes
-
-## KO : NE FONCTIONNE PAS
-def image_desc_hstack_v2(id, keypoints, descriptors=None, dtypes=None):
-    # deprecated
-    h = keypoints.shape[0]
-    if h == 0:
-        return None
-    if dtypes is None:
-        dtypes = image_desc_dtypes_v2(keypoints, descriptors)
-    id_rep = np.full((h, 1), id) #, dtype=dtypes[0])
-    #id_rep = np.empty((h, 1), dtype=dtypes[0])
-    #id_rep[:, 0] = id
-    if descriptors is None:
-        # id_rep = id_rep.astype(dtypes[0])
-        #keypoints = keypoints.astype(dtypes[1:])
-        print(np.dtype(dtypes))
-        desc_hstack = np.hstack([id_rep, keypoints])
-        desc_hstack = desc_hstack.astype(dtypes)
-        print(desc_hstack.dtype)
-        return desc_hstack
-    else:
-        # id_rep = id_rep.astype(dtypes[0])
-        #keypoints = keypoints.astype(dtypes[1:keypoints.shape[1]+1])
-        #descriptors = descriptors.astype(dtypes[keypoints.shape[1]+1:])
-        print(np.dtype(dtypes))
-        desc_hstack = np.hstack([id_rep, keypoints, descriptors])
-        display(desc_hstack[0])
-        desc_hstack = desc_hstack.astype(dtypes)
-        print(desc_hstack.dtype)
-        return desc_hstack
-
 
 # réunion des tableaux en un seul,
 # avec index de l'image en tête,
 # puis coordonnées et descripteur des points d'intérêt et descripteur
 def image_desc_hstack_v1(id, keypoints, descriptors=None):
-    # deprecated
+    """
+    DEPRECATED: Use 'image_descriptions_data' instead.
+
+    Stacks image id, keypoints coordinates and descriptors horizontally into a single array.
+    If descriptors is not given, only id and keypoints are stacked.
+
+    Parameters
+    ----------
+    id : str
+        The id of the image.
+    keypoints : np.ndarray
+        A 2D array with shape (n, 2) containing the coordinates of the keypoints.
+    descriptors : np.ndarray or None
+        A 2D array with shape (n, d) containing the descriptors of the keypoints.
+
+    Returns
+    -------
+    np.ndarray
+        A 2D array with shape (n, 2 + d), where the columns are the id,
+        y-coordinate, x-coordinate and the descriptors (if provided) of the
+        keypoints.
+    """
     h = keypoints.shape[0]
     if h == 0:
         return None
@@ -1789,7 +1780,31 @@ def image_desc_hstack_v1(id, keypoints, descriptors=None):
 
 
 def images_descriptions_array_v1(ids, keypoints, descriptors=None):
-    # deprecated
+    """
+    DEPRECATED: Use 'images_descriptions_data' instead.
+
+    Concatenates the keypoints and descriptors of multiple images into a single
+    array.
+
+    Parameters
+    ----------
+    ids : List[str]
+        A list of image ids.
+    keypoints : List[np.ndarray]
+        A list of 2D arrays with shape (n, 2) containing the coordinates of the
+        keypoints for each image.
+    descriptors : List[np.ndarray] or None
+        A list of 2D arrays with shape (n, d) containing the descriptors of the
+        keypoints for each image. If an image has no descriptors, the value is
+        None.
+
+    Returns
+    -------
+    np.ndarray
+        A 2D array with shape (m, 2 + d), where m is the total number of
+        keypoints across all images. The columns are the id, y-coordinate,
+        x-coordinate and the descriptors (if provided) of the keypoints.
+    """
     if descriptors is None:
         return np.vstack([
             image_desc_hstack_v1(i, k)
@@ -1805,7 +1820,31 @@ def images_descriptions_array_v1(ids, keypoints, descriptors=None):
 
 
 def images_descriptions_data_v1(ids, keypoints, descriptors=None):
-    # deprecated : use images_descriptions_data instead
+    """
+    DEPRECATED: Use 'images_descriptions_data' instead.
+
+    Concatenates the keypoints and descriptors of multiple images into a pandas
+    DataFrame.
+
+    Parameters
+    ----------
+    ids : List[str]
+        A list of image ids.
+    keypoints : List[np.ndarray]
+        A list of 2D arrays with shape (n, 2) containing the coordinates of the
+        keypoints for each image.
+    descriptors : List[np.ndarray] or None
+        A list of 2D arrays with shape (n, d) containing the descriptors of the
+        keypoints for each image. If an image has no descriptors, the value is
+        None.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with columns 'y', 'x' and descriptors (if provided) named
+        '0', '1', '2', ... The index contains the id of the image that the
+        keypoint belongs to.
+    """
     descs_array = images_descriptions_array_v1(ids, keypoints, descriptors)
     # just never redo this on a big one : pd.DataFrame.from_records(descs_array)
     data = pd.DataFrame(descs_array)
@@ -1820,7 +1859,30 @@ def images_descriptions_data_v1(ids, keypoints, descriptors=None):
     return data
 
 
-def get_id_rep_v1(ids, kpts):
+def get_id_rep_v1(
+    ids: List[str],
+    kpts: List[Optional[np.ndarray]]
+) -> np.ndarray:
+    r"""
+    DEPRECATED, use `get_id_rep` instead.
+    
+    Returns the ids and the corresponding key points in a stacked array.
+
+    Parameters
+    ----------
+    ids : List[str]
+        A list of image ids.
+    kpts : List[Optional[np.ndarray]]
+        A list of the keypoints corresponding to each image. If an image has no
+        keypoints, the value is None.
+
+    Returns
+    -------
+    np.ndarray
+        An array with the same number of rows as keypoints, where the ith row
+        corresponds to the ith keypoint, and the single column corresponds to
+        the id of the image it belongs to.
+    """
     # deprecated : plus compliquée et moins performante et surtout shape (n,)
     return np.vstack([
         np.full((kpt.shape[0], 1), id)
@@ -1829,14 +1891,59 @@ def get_id_rep_v1(ids, kpts):
     ])
 
 
-def get_id_rep(ids, kpts):
+def get_id_rep(
+    ids: List[str],
+    kpts: List[np.ndarray]
+) -> np.ndarray:
+    r"""Returns the ids and the corresponding key points in a stacked array.
+
+    Parameters
+    ----------
+    ids : List[str]
+        A list of image ids.
+    kpts : List[np.ndarray]
+        A list of the keypoints corresponding to each image. If an image has no
+        keypoints, the list is empty.
+
+    Returns
+    -------
+    np.ndarray
+        An array with the same number of rows as keypoints, where the ith row
+        corresponds to the ith keypoint, and the single column corresponds to
+        the id of the image it belongs to.
+    """
     return np.concatenate([
         np.repeat(id, kpt.shape[0])
         for id, kpt in zip(ids, kpts)
     ])
 
 
-def images_descriptions_data(ids, kpts, descs=None):
+def images_descriptions_data(
+    ids: List[str],
+    kpts: List[np.ndarray],
+    descs: Optional[List[np.ndarray]] = None
+) -> pd.DataFrame:
+    r"""Creates a pandas DataFrame containing the keypoints and optional
+    descriptors.
+
+    Parameters
+    ----------
+    ids : List[str]
+        A list of image ids.
+    kpts : List[np.ndarray]
+        A list of the keypoints corresponding to each image. If an image has no
+        keypoints, the list is empty.
+    descs : List[np.ndarray], optional
+        A list of the descriptors corresponding to each image. If an image has
+        no descriptors, the list is empty.
+
+    Returns
+    -------
+    pd.DataFrame
+        A pandas DataFrame with two columns named 'y' and 'x', corresponding to
+        the row and column positions of each keypoint, and one column for each
+        descriptor dimension.
+    """
     id_rep = get_id_rep(ids, kpts)
     kpts_stacked = np.vstack([kpt for kpt in kpts if kpt is not None])
     kpts_data = pd.DataFrame(kpts_stacked, index=id_rep).astype(dtype=int)
@@ -1852,7 +1959,28 @@ def images_descriptions_data(ids, kpts, descs=None):
         return pd.concat([kpts_data, descs_data], axis=1)
 
 
-def save_desc_data(data, data_name, root_dir=None):
+def save_desc_data(
+        data: pd.DataFrame,
+        data_name: str,
+        root_dir: Optional[str] = None
+) -> None:
+    r"""Saves the given pandas DataFrame to a parquet file with the specified
+    name.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The data to be saved.
+    data_name : str
+        The name to be used for the parquet file (without file extension).
+    root_dir : str, optional
+        The path to the directory where the file should be saved.
+        If None, the current working directory is used.
+
+    Returns
+    -------
+    None
+    """
     if root_dir is not None:
         create_if_not_exist(root_dir)
     file_path = f"{root_dir}{data_name}.parquet"
@@ -1866,7 +1994,7 @@ def load_desc_data(
         dataname: str,
         root_dir: Optional[str] = None
 ) -> pd.DataFrame:
-    r"""Load the data with given dataname from the specified root directory.
+    r"""Loads the data with given dataname from the specified root directory.
 
     Parameters
     ----------
@@ -1891,7 +2019,19 @@ def load_desc_data(
 """ Images metadata
 """
 
-def load_images_and_ids(images_dir):
+def load_images_and_ids(images_dir: str) -> Tuple[np.ndarray, np.ndarray]:
+    r"""Loads image files and corresponding ids from a directory.
+
+    Parameters
+    ----------
+    images_dir : str
+        The path to the directory where images are stored.
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        A tuple containing numpy arrays of images and ids.
+    """
     filenames, ids = get_file_names_and_ids(images_dir)
     if len(filenames) == 0:
         print(f"Empty folder case ({images_dir}) : pass")
@@ -1904,7 +2044,21 @@ def load_images_and_ids(images_dir):
     return imgs, ids
 
 
-def get_images_info_data(imgs, ids):
+def get_images_info_data(imgs: np.ndarray, ids: np.ndarray) -> pd.DataFrame:
+    r"""Extracts metadata from image files.
+
+    Parameters
+    ----------
+    imgs : np.ndarray
+        A numpy array of images.
+    ids : np.ndarray
+        A numpy array of ids corresponding to the images.
+
+    Returns
+    -------
+    pd.DataFrame
+        A pandas DataFrame containing metadata of the images.
+    """
     records = np.array([
         (id, img.format, img.mode, img.size[0], img.size[1])
         for id, img in zip(ids, imgs)
@@ -1919,21 +2073,45 @@ def get_images_info_data(imgs, ids):
     return data
 
 
-def subdirs(root_dir):
+def subdirs(root_dir: str) -> List[str]:
+    r"""Lists all subdirectories of a directory.
+
+    Parameters
+    ----------
+    root_dir : str
+        The path to the directory.
+
+    Returns
+    -------
+    List[str]
+        A list of subdirectories.
+    """
     pathes = glob.glob(f"**/", root_dir=root_dir, recursive=True)
     return [path.replace("\\", "/") for path in pathes]
 
 
-def extract_info_data(root_dir, images_path):
+def extract_info_data(root_dir: str, images_path: str) -> None:
+    r"""Extracts metadata from image files and save to a CSV file.
+
+    Parameters
+    ----------
+    root_dir : str
+        The path to the root directory where the metadata CSV file will be
+        saved.
+    images_path : str
+        The path to the directory where images are stored.
+    """
     images_dir = root_dir + images_path
-    info_data_filename = images_path.replace("/", "_").replace(" ", "_") + "format.csv"
-    info_data_path = root_dir + info_data_filename
+    info_data_filename = (
+        images_path
+        .replace("/", "_")
+        .replace(" ", "_")
+        + "format.csv"
+    )
+    info_data_path = root_dir + "_img_formats/" + info_data_filename
     print(info_data_filename)
     imgs, ids = load_images_and_ids(images_dir)
     if imgs is None or len(imgs) == 0:
         return
     data = get_images_info_data(imgs, ids)
     data.to_csv(info_data_path, encoding='utf8')
-
-
-

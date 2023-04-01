@@ -1,5 +1,6 @@
 from typing import *
 import os
+import math
 import time
 import timeit
 
@@ -60,17 +61,19 @@ from tx_ml import (
 # tx_ml BERT :
 import tensorflow as tf
 from transformers import TFAutoModel, AutoTokenizer
-from keras.preprocessing.text import FullTokenizer
+# from keras.preprocessing.text import FullTokenizer
 
 #from tranformers.tokenization import FullTokenizer
 #from bert.tokenization import FullTokenizer
 
-from tx_ml import (
-    encode_sentences_with_bert,
+# depr. now full included in BertVectorizer class. See below
+"""from tx_ml import (
+    encode_corpus_with_bert,
     extract_bert_sentence_embeddings    # features extraction
-)
+)"""
 
 # tx_ml USE :
+import tensorflow_hub as hub
 from tx_ml import extract_use_sentence_embeddings  # features extraction
 
 
@@ -212,7 +215,7 @@ def display_features_index(verbosity: int, extractor: BaseEstimator) -> None:
     if verbosity > 2:
         feat_names = extractor.get_feature_names_out()
         print("n_features:", len(feat_names))
-        display(feat_names)
+        print(feat_names)
 
 
 def display_time(verbosity: bool, what: str, dt: float) -> None:
@@ -385,16 +388,27 @@ def pack_pipeline_labels(
 
 
 class PipelineScores(NamedTuple):
+    accuracy: float
+    comb_accuracy: float
     ari: float
     comb_ari: float
-    # Not relevant with classification
-    # r2: float
-    # comb_r2: float
+    jaccard: float
+    comb_jaccard: float
+    precision: float
+    comb_precision: float
+    recall: float
+    comb_recall: float
+    f1: float
+    comb_f1: float
 
 
 def pack_pipeline_scores(
+    accuracy: float, comb_accuracy: float,
     ari: float, comb_ari: float,
-    # r2: float, comb_r2: float  # Not relevant with classification
+    jaccard: float, comb_jaccard: float,
+    precision: float, comb_precision: float,
+    recall: float, comb_recall: float,
+    f1: float, comb_f1: float,
 ) -> PipelineScores:
     r"""Pack pipeline scores into a PipelineScores named tuple.
 
@@ -417,7 +431,14 @@ def pack_pipeline_scores(
         The pipeline scores.
     """
     # Not relevant with classification, r2=r2, comb_r2=comb_r2)
-    return PipelineScores(ari=ari, comb_ari=comb_ari) 
+    return PipelineScores(
+        accuracy=accuracy, comb_accuracy=comb_accuracy,
+        ari=ari, comb_ari=comb_ari,
+        jaccard=jaccard, comb_jaccard=comb_jaccard,
+        precision=precision, comb_precision=comb_precision,
+        recall=recall, comb_recall=comb_recall,
+        f1=f1, comb_f1=comb_f1,
+    ) 
 
 
 class PipelineTimes(NamedTuple):
@@ -491,7 +512,8 @@ def pack_pipeline_models(
 # Portage de l'ex show_tsne
 def show_classif_results(
     verbosity: int, rd_feats: np.ndarray,
-    labels: PipelineLabels, scores: PipelineScores, params: PipelineParams
+    labels: PipelineLabels, scores: PipelineScores,
+    dims: PipelineDims, params: PipelineParams
 ) -> None:
     r"""Show the results of the classification.
 
@@ -505,6 +527,8 @@ def show_classif_results(
         The labels.
     scores : PipelineScores
         The scores.
+    dims : PipelineDims
+        The dimensions.
     params : PipelineParams
         The parameters.
     """
@@ -581,13 +605,20 @@ def show_classif_results(
 
     if scores:
         scores_cartouche = "\n".join(
-            [f"{k}: {v:.4e}" for k, v in scores._asdict().items()]
+            # TODO: LaTeX conv. symb. for each metric
+            [
+                f"{k}: {v:.4f}"
+                for k, v in scores._asdict().items()
+                if v  # is not None
+            ]
         )
         pe_bbox = dict(boxstyle='round', facecolor='green', alpha=0.5)
         fig.text(0.9, .98, scores_cartouche, bbox=pe_bbox, ha='right', va='top')
 
+    comb = dims.n_sents > dims.n_docs
+    ari = scores.comb_ari if comb else scores.ari
     save_and_show(
-        f"tx_classif_results_{corpus_name}_{extractor_name}",
+        f"ari_{math.floor(100 * ari)}_{corpus_name}_{extractor_name}",
         sub_dir="tx_classif_results"
     )
 
@@ -624,10 +655,30 @@ def display_and_show_perfs(
         print(f"{bold('n_sents')}: {dims.n_sents}")
         print(f"{bold('n_features')}: {dims.n_feats}")
         print(f"{bold('n_red_feats')}: {dims.n_rd_feats}")
-        print(f"{bold('ARI (pred by sent)')}: {scores.ari:.4f}")
-        print(f"{bold('ARI (pred by doc)')}: {scores.comb_ari:.4f}")
-        print(f"{bold('R2 (pred by sent)')}: {scores.r2:.4f}")
-        print(f"{bold('R2 (pred by doc)')}: {scores.comb_r2:.4f}")
+        print()
+
+        comb = dims.n_sents > dims.n_docs
+        by = ""
+        if comb:
+            by = " (pred by sent)"
+
+        print(f"{bold('Accuracy')}{by}: {scores.accuracy:.4f}")
+        print(f"{bold('ARI')}{by}: {scores.ari:.4f}")
+        print(f"{bold('Jaccard Index')}{by}: {scores.jaccard:.4f}")
+        print(f"{bold('Precision')}{by}: {scores.precision:.4f}")
+        print(f"{bold('Recall')}{by}: {scores.recall:.4f}")
+        print(f"{bold('F1')}{by}: {scores.f1:.4f}")
+        print()
+
+        if comb:
+            by = " (pred by doc)"        
+            print(f"{bold('Accuracy')}{by}: {scores.comb_accuracy:.4f}")
+            print(f"{bold('ARI')}{by}: {scores.comb_ari:.4f}")
+            print(f"{bold('Jaccard Index')}{by}: {scores.comb_jaccard:.4f}")
+            print(f"{bold('Precision')}{by}: {scores.comb_precision:.4f}")
+            print(f"{bold('Recall')}{by}: {scores.comb_recall:.4f}")
+            print(f"{bold('F1')}{by}: {scores.comb_f1:.4f}")
+            print()
 
         if verbosity > 2:
             for k, v in times._asdict().items():
@@ -764,18 +815,37 @@ def _tx_ml_pipeline(
 
     stl(v, "Predictions combination and labels alignment")
 
-    mapping = match_class(y_pred, y)
+    mapping = match_class(y_pred, y)  # linear assignement
     y_pred = np.array([mapping[clu] for clu in y_pred])
-    comb_y, comb_y_pred = combine_predictions(y, y_pred)
+
+    comb = n_sents > n_docs
+    comb_y = comb_y_pred = None
+    if comb:
+        comb_y, comb_y_pred = combine_predictions(y, y_pred)
 
     stl(v, "Compute scores")
 
     sh_t = -timeit.default_timer()
+
+    accuracy = metrics.accuracy_score(y, y_pred)
     ari = metrics.adjusted_rand_score(y, y_pred)
-    comb_ari = metrics.adjusted_rand_score(comb_y, comb_y_pred)
-    # Not relevant with classification
-    # r2 = metrics.r2_score(y, y_pred)
-    # comb_r2 = metrics.r2_score(comb_y, comb_y_pred)
+    # Note: `micro` is worst than `macro`
+    kwargs = {'y_true': y, 'y_pred': y_pred, 'average': "micro"}
+    jaccard = metrics.jaccard_score(**kwargs)
+    precision = metrics.precision_score(**kwargs)
+    recall = metrics.recall_score(**kwargs)
+    f1 = metrics.f1_score(**kwargs)
+
+    comb_ari = comb_jaccard = comb_accuracy = \
+        comb_precision = comb_recall = comb_f1 = None
+    if comb:
+        comb_accuracy = metrics.accuracy_score(comb_y, comb_y_pred)
+        comb_ari = metrics.adjusted_rand_score(comb_y, comb_y_pred)
+        kwargs = {'y_true': comb_y, 'y_pred': comb_y_pred, 'average': "micro"}
+        comb_jaccard = metrics.jaccard_score(**kwargs)
+        comb_precision = metrics.precision_score(**kwargs)
+        comb_recall = metrics.recall_score(**kwargs)
+        comb_f1 = metrics.f1_score(**kwargs)
 
     stl(v, "Show classification results and performances")
 
@@ -784,11 +854,14 @@ def _tx_ml_pipeline(
         cp_params, ex_params, rd_params, cl_params,  
     )
     models = pack_pipeline_models(ex, rd, cl)
-    scores = pack_pipeline_scores(ari, comb_ari)  # Not relevant with classification, r2, comb_r2)
+    scores = pack_pipeline_scores(
+        accuracy, comb_accuracy, ari, comb_ari, jaccard, comb_jaccard,
+        precision, comb_precision, recall, comb_recall, f1, comb_f1,
+    )
     dims = pack_pipeline_dims(n_docs, n_sents, n_feats, n_rd_feats)
     labels = pack_pipeline_labels(y, y_pred, comb_y, comb_y_pred)
 
-    show_classif_results(v, rd_feats, labels, scores, params)
+    show_classif_results(v, rd_feats, labels, scores, dims, params)
 
     sh_t += timeit.default_timer()
     tt_t += timeit.default_timer()
@@ -1075,113 +1148,9 @@ class KerasW2VModel:
         return keras_w2v_model.predict(padded_num_corpus)
 
 
-class BertVectorizer:
-
-    def __init__(
-        self,
-        model_type: str,
-        output_hidden_states: bool = False,
-        hub: str = "huggingface",
-        max_length: int = 64,
-        batch_size: int = None,   # `None` means no batch
-        include_cls_token: bool = False,  # If True, get the [CLS] token
-    ):
-        self.model_type = model_type
-        self.hub = hub
-        self.max_length = max_length
-        self.batch_size = batch_size
-        self.include_cls_token = include_cls_token
-
-        if hub == "huggingface":
-            self.bert_model = TFAutoModel.from_pretrained(
-                model_type, output_hidden_states=output_hidden_states
-            )
-            self.bert_tokenizer = AutoTokenizer.from_pretrained(model_type)
-            self.output_key = "last_hidden_state"
-            if include_cls_token:
-                self.pooler_key = "pooler_output"
-            else:
-                self.pooler_key = None
-
-        elif hub == "tfhub":
-            self.bert_model = hub.KerasLayer(
-                f"https://tfhub.dev/tensorflow/{model_type}/3",
-                trainable=True
-            )
-            self.bert_tokenizer = FullTokenizer(
-                vocab_file=f"gs://tfhub-modules/tensorflow/{model_type}/3/assets/30k-clean.vocab",
-                do_lower_case=True
-            )
-            self.output_key = "sequence_output"
-            if include_cls_token:
-                self.pooler_key = "pooled_output"
-            else:
-                self.pooler_key = None
-
-        else:
-            raise ValueError(f"Invalid hub value: {hub}")
-
-        self.n_features = self.bert_model.output_shape[-1]
-
-    def get_params(self):
-        return {
-            "model_type": self.model_type,
-            "max_length": self.max_length,
-            "batch_size": self.batch_size
-        }
-
-    def get_feature_names_out(self):
-        return [f"feat_{i}" for i in range(self.n_features)]
-
-    def fit_transform(self, corpus: pd.Series) -> np.ndarray:
-        # Encode the corpus with the BERT tokenizer
-        encoded_corpus = encode_sentences_with_bert(
-            corpus, self.bert_tokenizer, self.max_length
-        )
-
-        # Get the BERT embeddings for the BERT encoded corpus
-        embeddings = None
-        if self.batch_size is None:  # No batch mode
-            if self.hub == "huggingface":
-                if self.include_cls_token:
-                    outputs = self.bert_model.predict(encoded_corpus)
-                    embeddings = outputs[self.pooler_key].numpy()
-                else:
-                    outputs = self.bert_model(encoded_corpus)
-                    embeddings = outputs[self.output_key].numpy()
-
-            elif self.hub == "tfhub":
-                tf_encoded_corpus = {
-                    "input_word_ids": encoded_corpus[0],
-                    "input_type_ids": encoded_corpus[1],
-                    "input_mask": encoded_corpus[2],
-                }
-                outputs = self.bert_model(tf_encoded_corpus)
-                embeddings = outputs[self.output_key].numpy()
-
-        else:  # batch mode
-            n_samples = corpus.shape[0]
-            embeddings = np.empty((n_samples, self.n_features))
-            for i in range(0, n_samples, self.batch_size):
-                batch_slice = slice(i, i+self.batch_size)
-                batch = tuple(
-                    encoded_corpus[i][batch_slice]
-                    for i in range(3)
-                )
-                outputs = self.bert_model(batch)
-                # embeddings[batch_slice] = batch_embeddings[1]
-                if self.include_cls_token:
-                    embeddings[batch_slice] = outputs[self.pooler_key]
-                else:
-                    embeddings[batch_slice] = outputs[self.output_key]
-
-        # Compute and return the mean of the word embeddings for each sentence
-        return np.mean(embeddings, axis=1)
-
-
 
 def tx_ml_word2vec(
-    sents: pd.Series,
+    corpus: pd.Series,
     cla_labels: pd.Series,
     corpus_name: str,
     verbosity: int = 0,
@@ -1264,7 +1233,7 @@ def tx_ml_word2vec(
             'n_init': 100,  # Number of time the k-means algorithm will be run with different centroid seeds
             'random_state': 42,
         },
-        corpus=sents,
+        corpus=corpus,
         y=cla_labels,
         corpus_name=corpus_name,
         verbosity=verbosity,
@@ -1283,62 +1252,444 @@ def _check_gpu() -> None:
     print("Built with cuda:", tf.test.is_built_with_cuda())
 
 
+
+
+
+class BertVectorizer:
+
+    def __init__(
+        self,
+        hub: str = "huggingface",  # Only 'huggingface' is currently supported.
+        bert_model_name: str = "bert-base-uncased",
+        max_length: int = 64,  # max of 512 with bert-base-uncased (hidden_size)
+        batch_size: Optional[int] = None,  # `None` means no batch
+        # If "last_hidden_state" a pooling_fn must be specified
+        target_layer: str = "last_hidden_state",  # "pooler_output" : manifestement le CLS par défaut est mauvais
+        # if None, use the standard BERT CLS output (pooler_output)
+        pooling_fn: Callable[[np.ndarray], np.ndarray] = lambda x: np.mean(x, axis=1), # None, # = np.mean, np.max (.., axis=1)
+    ):
+        r"""BERT-based text encoder.
+
+        Parameters
+        ----------
+        hub : str, default='huggingface'
+            The hub to use. Only 'huggingface' is currently supported.
+        bert_model_name : str, default='bert-base-uncased'
+            The name of the pre-trained BERT model to use.
+        max_length : int, default=64
+            The maximum length of a token sequence. Note that longer sequences
+            are truncated.
+        batch_size : int or None, default=None
+            The number of samples to include in each batch. If None, the entire
+            corpus is encoded as a single batch.
+        target_layer : str, default='pooler_output'
+            The BERT layer to use for feature extraction. Must be one of the
+            available layer names in the pre-trained model.
+            If 'last_hidden_state', a `pooling_fn` must also be specified.
+        pooling_fn : callable or None, default=None
+            A function to use to pool the BERT outputs from the selected
+            `target_layer` into a fixed-size vector for each sequence. If None,
+            the default 'pooler_output' vector is used directly.
+            If 'last_hidden_state', a pooling function must be specified.
+            The pooling function must take a numpy array of shape (batch_size,
+            seq_len, n_features) and return a numpy array of shape (batch_size,
+            n_features). Examples of supported functions include np.mean,
+            np.max, and custom functions.
+
+            Note: `target_layer` and `pooling_fn` must be consistent.
+            If `target_layer` is set to 'last_hidden_state', `pooling_fn` must
+            be a callable. If `pooling_fn` is None, the identity function is
+            used by default.
+
+        Raises
+        ------
+        ValueError
+            If an invalid hub is specified.
+
+        Notes
+        -----
+        The `target_layer` and `pooling_fn` parameters must be consistent.
+        If `target_layer` is set to 'last_hidden_state', a callable
+        `pooling_fn` must also be specified to aggregate the hidden states into
+        a fixed-size vector. For example, if `pooling_fn` is set to np.mean,
+        the final embeddings for each sequence will be the mean of the hidden
+        states across all tokens in the sequence. If `pooling_fn` is None, the
+        default behavior is to use the 'pooler_output' vector provided by BERT
+        for each sequence.
+
+        Examples
+        --------
+        Create a BERT text encoder using the last hidden state and mean
+        pooling:
+
+        >>> import numpy as np
+        >>> from typing import List
+        >>> from transformers import AutoTokenizer, TFAutoModel
+        >>> from my_module import BERTTextEncoder
+        >>> 
+        >>> tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+        >>> model = TFAutoModel.from_pretrained('bert-base-uncased')
+        >>> 
+        >>> def mean_pooling(last_hidden_states):
+        >>>     # last_hidden_states.shape = (batch_size, seq_len, hidden_size)
+        >>>     return np.mean(last_hidden_states, axis=1)
+        >>> 
+        >>> encoder = BERTVectorizer(
+        >>>     hub='huggingface',
+        >>>     bert_model_name='bert-base-uncased',
+        >>>     max_length=64,
+        >>>     batch_size=None,
+        >>>     target_layer='last_hidden_state',
+        >>>     pooling_fn=mean_pooling
+        >>> )
+        """
+        self.hub = hub
+        self.bert_model_name = bert_model_name
+        self.max_length = max_length
+        self.batch_size = batch_size
+        self.target_layer = target_layer
+        self.pooling_fn = pooling_fn if pooling_fn else lambda x: x
+        print("pooling_fn:", self.pooling_fn)
+
+        if hub == "huggingface":
+            # Note: the defaut is output_hidden_states=False and it's what we want
+            self.bert_model = TFAutoModel.from_pretrained(bert_model_name)
+            self.bert_tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
+
+            """elif hub == "tfhub": ne fonctionne pas !
+                self.bert_model = hub.KerasLayer(
+                    f"https://tfhub.dev/tensorflow/{model_type}/3",
+                    trainable=True
+                )
+                self.bert_tokenizer = FullTokenizer(
+                    vocab_file=f"gs://tfhub-modules/tensorflow/{model_type}/3/assets/30k-clean.vocab",
+                    do_lower_case=True
+                )
+                self.output_key = "sequence_output"
+                if include_cls_token:
+                    self.pooler_key = "pooled_output"
+                else:
+                    self.pooler_key = None
+            """
+        else:
+            raise ValueError(f"Invalid hub value: {hub}")
+        
+        self.n_features = self.bert_model.config.hidden_size
+
+    def get_params(self) -> Dict[str, Union[str, int, Callable]]:
+        r"""Returns the current parameters of the BERTVectorizer.
+
+        Returns
+        -------
+        Dict[str, Union[str, int, Callable]]
+            The current parameters of the BERTVectorizer.
+        """
+        return {
+            "hub": self.hub,
+            "bert_model_name": self.bert_model_name,
+            "max_length": self.max_length,
+            "batch_size": self.batch_size,
+            "target_layer": self.target_layer,
+            "pooling_fn": self.pooling_fn,
+            "n_features": self.n_features,            
+        }
+
+    def get_feature_names_out(self) -> List[str]:
+        r"""Returns the names of the feature columns output by the transformer.
+
+        Returns
+        -------
+        List[str]
+            The names of the feature columns output by the transformer.
+        """
+        return [f"feat_{i}" for i in range(self.n_features)]
+
+    def encode_corpus(
+        self,
+        corpus: pd.Series
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        r"""Encodes a corpus of text strings using the BERTVectorizer.
+
+        Parameters
+        ----------
+        corpus : pd.Series
+            The preprocessed sentences as a series of strings to be transformed
+            into embeddings.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray, np.ndarray]
+            Tuple of the encoded input ids, token type ids, attention mask.
+        """
+        """return encode_corpus_with_bert(
+            corpus, self.bert_tokenizer, self.max_length
+        )"""
+        bert_inputs = self.bert_tokenizer.batch_encode_plus(
+            corpus.tolist(),
+            add_special_tokens=True,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_attention_mask=True,
+            return_token_type_ids=True,
+            return_tensors="tf"
+        )
+        # Stack the input arrays
+        input_ids = np.stack(bert_inputs['input_ids'])
+        attention_mask = np.stack(bert_inputs['attention_mask'])
+        token_type_ids = np.stack(bert_inputs['token_type_ids'])
+
+        # Return the encoded inputs
+        return input_ids, attention_mask, token_type_ids
+    
+    def _get_embeddings(
+        self,
+        encoded_corpus: Tuple[np.ndarray, np.ndarray, np.ndarray]
+    ) -> np.ndarray:
+        r"""Gets the embeddings of an encoded corpus using the pre-trained
+        BERT model.
+
+        Parameters
+        ----------
+        encoded_corpus : Tuple[np.ndarray, np.ndarray, np.ndarray]
+            The encoded corpus as a tuple of numpy arrays containing the input
+            word ids, token type ids, and attention masks.
+
+        Returns
+        -------
+        np.ndarray
+            A 2D numpy array containing the embeddings of the input corpus,
+            where each row represents the embedding of a single sentence.
+        """
+        if self.hub != "huggingface":
+            raise ValueError(f"Invalid hub value: {self.hub}")
+        """elif self.hub == "tfhub":
+            tf_encoded_corpus = {
+                "input_word_ids": encoded_corpus[0],
+                "input_type_ids": encoded_corpus[1],
+                "input_mask": encoded_corpus[2],
+            }
+            outputs = self.bert_model(tf_encoded_corpus)
+            embeddings = outputs[self.output_key].numpy()
+        """
+        # voir commentaire ci-après entre pasage par le constructeur vs. predict
+        # outputs = self.bert_model(encoded_corpus)
+        outputs = self.bert_model.predict(
+            encoded_corpus, batch_size=self.batch_size
+        )
+        print("extract target layer :", self.target_layer)
+
+        out = outputs[self.target_layer]
+        print("out.shape", out.shape)
+        return self.pooling_fn(out)
+
+
+    def fit_transform(self, corpus: pd.Series) -> np.ndarray:
+        r"""Encodes the input corpus with the BERT tokenizer, then compute the
+        BERT embeddings using the target BERT layer and the pooling function,
+        for each document in the corpus.
+
+        Parameters
+        ----------
+        corpus : pd.Series
+            The preprocessed sentences as a series of strings to be transformed
+            into embeddings.
+
+        Returns
+        -------
+        embeddings : np.ndarray
+            The computed embeddings for the input corpus, as a 2D array of
+            shape `(n_samples, n_features)`.
+        """
+        # Encode the corpus with the BERT tokenizer
+        encoded_corpus = self.encode_corpus(corpus)
+
+        # Get the BERT embeddings for the BERT encoded corpus
+        # embeddings = None
+        # if self.batch_size is None:  # No batch mode
+        embeddings = self._get_embeddings(encoded_corpus)
+
+        """ En fait, c'est totalement inutile de passer ainsi par le constructeur
+        au lieu de systématiquement utiliser predict pour les raisons suivantes :
+            1) predict prend en charge le travail par lot avec un paramètre batch_size
+            il est donc inutile de l'implémenter soi-même
+            2) les performances en termes de temps de traitement comme de qualité
+            des prédictions sont meilleures avec predict.
+            3) et pas de moindres : c'est plus simple
+        else:  # Batch mode
+            # Slices the encoded corpus into batches, computes their BERT embeddings
+            # and stores them in the 'embeddings' array. If the 'include_cls_token' flag
+            # is True, the [CLS] token embedding is used as a summary vector, otherwise
+            # the embedding of the last BERT layer is used.
+            n_samples = corpus.shape[0]
+            embeddings = np.empty((n_samples, self.n_features))
+            for i in range(0, n_samples, self.batch_size):
+                batch_slice = slice(i, i+self.batch_size)
+                batch = tuple(np.stack(encoded_corpus)[:, batch_slice, :])
+                embeddings[batch_slice] = self._get_embeddings(batch)
+
+            "" à (re)tester, adapté de mon proto trashme.ipynb :
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                batch_slices = [
+                    slice(i, i+self.batch_size)
+                    for i in range(0, n_samples, self.batch_size)
+                ]
+                batch_list = [
+                    tuple(np.stack(encoded_corpus)[:, batch_slice, :])
+                    for batch_slice in batch_slices
+                ]
+                ouputs_list = list(executor.map(self._get_embeddings, batch_list))
+
+            for i, outputs in enumerate(outputs_list):
+                batch_slice = batch_slices[i]
+                embeddings[batch_slice] = outputs
+            ""
+        """
+
+        return embeddings
+
+
 def tx_ml_bert(
-    sents: pd.Series,
-    cla_labels: List[int],
-    name: str
-) -> None:
-    r"""Extract sentence embeddings using BERT HuggingFace and visualize the
-    data with t-SNE.
-
-    Parameters:
-    -----------
-    sents : pd.Series
-        The preprocessed sentences as a series of strings to be transformed
-        into embeddings.
-    cla_labels: list
-        A list of integers representing the labels of each sentence.
-    name: str
-        A string representing the name of the model being used.
-
-    Returns:
-    --------
-    None
-    """
-    start_t = time.time()
-    n_sents = sents.shape[0]
-    n_docs = len(set(sents.index))
-
-    print_title(f"Embedding - BERT HuggingFace ({name})")
-
-    _check_gpu()
-
-    # BERT HuggingFace
-    model_type = 'bert-base-uncased'
-    model = TFAutoModel.from_pretrained(model_type)
-
-    print_subtitle("Feature extraction")
-    max_length = 64
-    batch_size = 10
-    features, _ = extract_bert_sentence_embeddings(
-        model, model_type,
-        sents, 
-        max_length, batch_size, mode='HF'
+    corpus: pd.Series,
+    cla_labels: pd.Series,
+    corpus_name: str,
+    verbosity: int = 0,
+    corpus_params: Optional[Dict[str, Any]] = None,
+    bert_params: Optional[Dict[str, Any]] = None,
+    kmeans_params: Optional[Dict[str, Any]] = None,
+    tsne_params: Optional[Dict[str, Any]] = None
+) -> Tuple[pd.Series, float, float, int]:
+    r"""Apply BERT embedding to the preprocessed corpus."""
+    return _tx_ml_pipeline(
+        "BertVectorizer",
+        BertVectorizer, TSNE, KMeans,
+        cp_params={},
+        ex_params={
+            'hub': "huggingface",  # Only 'huggingface' is currently supported.
+            'bert_model_name': "bert-base-uncased",
+            'max_length': 64,  # Max of 512 with bert-base-uncased (hidden_size)
+            'batch_size': None,  # `None` means no batch
+            'target_layer': "pooler_output",  # If "last_hidden_state" a pooling_fn must be specified
+            # If None, use the standard BERT CLS output (pooler_output)
+            'pooling_fn': None, # = np.mean, np.max (.., axis=1)  
+        },
+        rd_params={
+            'n_components': 2,  # Dimension of the embedded space : fixed
+            'perplexity': 30.0,  # [5, 50] Larger datasets usually require a larger perplexity.
+            'early_exaggeration': 12.0,  # Not very critical
+            'learning_rate': 'auto',  # [10.0, 1000.0],  max(N / early_exaggeration / 4, 50)
+            'n_iter': 1000,  # Maximum number of iterations for the optimization (> 250)
+            'init': 'random',  # Otherwise 'pca', but not with a sparse input matrix like in this project
+            'method': 'barnes_hut',  # Otherwise 'exact' but on small sample (O(N^2) against O(NlogN))
+            'random_state': 42,
+        },
+        cl_params={
+            'n_clusters': len(set(cla_labels)),  # Number of clusters
+            'n_init': 100,  # Number of time the k-means algorithm will be run with different centroid seeds
+            'random_state': 42,
+        },
+        corpus=corpus,
+        y=cla_labels,
+        corpus_name=corpus_name,
+        verbosity=verbosity,
+        cp_params_update=corpus_params,
+        ex_params_update=bert_params,
+        rd_params_update=tsne_params,
+        cl_params_update=kmeans_params,
     )
-    n_features = features.shape[1]
 
-    print_subtitle("tSNE and ARI")
-    X_tsne, clu_labels, ari = tsne_kmeans_ari(features, cla_labels)
 
-    print_subtitle("Plot")
-    cla_names = list(get_class_label_name_map().values())
-    show_tsne(
-        cla_labels, cla_names, X_tsne, clu_labels, ari,
-        f"BERT embedded {name} t-SNE clustering"
-    )
+class USEVectorizer:
+
+    def __init__(
+        self,
+        batch_size: int = 10,  # `None` means no batch
+    ):
+        self.use_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder/4")
+        self.batch_size = batch_size
+        self.n_features = 512
+
+    def get_params(self) -> Dict[str, Union[str, int, Callable]]:
+        r"""Returns the current parameters of the USEVectorizer.
+
+        Returns
+        -------
+        Dict[str, Union[str, int, Callable]]
+            The current parameters of the BERTVectorizer.
+        """
+        return {
+            "batch_size": self.batch_size,            
+            "n_features": self.n_features,            
+        }
+        
+    def get_feature_names_out(self) -> List[str]:
+        r"""Returns the names of the feature columns output by the transformer.
+
+        Returns
+        -------
+        List[str]
+            The names of the feature columns output by the transformer.
+        """
+        return [f"feat_{i}" for i in range(self.n_features)]
+    
+
+    def fit_transform(self, corpus: pd.Series) -> np.ndarray:
+        if not self.batch_size:
+            return self.use_model(corpus)
+        else:
+            return np.concatenate([
+                self.use_model(corpus[k:k+self.batch_size])
+                for k in range(0, corpus.shape[0], self.batch_size)
+            ])
+
 
 
 def tx_ml_use(
+    corpus: pd.Series,
+    cla_labels: pd.Series,
+    corpus_name: str,
+    verbosity: int = 0,
+    corpus_params: Optional[Dict[str, Any]] = None,
+    use_params: Optional[Dict[str, Any]] = None,
+    kmeans_params: Optional[Dict[str, Any]] = None,
+    tsne_params: Optional[Dict[str, Any]] = None
+) -> Tuple[pd.Series, float, float, int]:
+    r"""Apply USE embedding to the preprocessed corpus."""
+    return _tx_ml_pipeline(
+        "USEVectorizer",
+        USEVectorizer, TSNE, KMeans,
+        cp_params={},
+        ex_params={
+            'batch_size': None,  # `None` means no batch
+        },
+        rd_params={
+            'n_components': 2,  # Dimension of the embedded space : fixed
+            'perplexity': 30.0,  # [5, 50] Larger datasets usually require a larger perplexity.
+            'early_exaggeration': 12.0,  # Not very critical
+            'learning_rate': 'auto',  # [10.0, 1000.0],  max(N / early_exaggeration / 4, 50)
+            'n_iter': 1000,  # Maximum number of iterations for the optimization (> 250)
+            'init': 'random',  # Otherwise 'pca', but not with a sparse input matrix like in this project
+            'method': 'barnes_hut',  # Otherwise 'exact' but on small sample (O(N^2) against O(NlogN))
+            'random_state': 42,
+        },
+        cl_params={
+            'n_clusters': len(set(cla_labels)),  # Number of clusters
+            'n_init': 100,  # Number of time the k-means algorithm will be run with different centroid seeds
+            'random_state': 42,
+        },
+        corpus=corpus,
+        y=cla_labels,
+        corpus_name=corpus_name,
+        verbosity=verbosity,
+        cp_params_update=corpus_params,
+        ex_params_update=use_params,
+        rd_params_update=tsne_params,
+        cl_params_update=kmeans_params,
+    )
+
+
+
+def old_tx_ml_use(
     sents: pd.Series,
     cla_labels: List[int],
     name: str

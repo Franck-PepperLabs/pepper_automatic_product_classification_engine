@@ -1097,11 +1097,11 @@ def old_encode_sentences_with_bert(
     return input_ids, token_type_ids, attention_mask, bert_inp_tot
 
 
-def encode_sentences_with_bert(
+def encode_corpus_with_bert(
     corpus: pd.Series,
     max_length: int
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    r"""Encode a list of strings into BERT-compatible inputs.
+    r"""Encodes a list of strings into BERT-compatible inputs.
 
     Parameters
     ----------
@@ -1130,8 +1130,8 @@ def encode_sentences_with_bert(
     )
 
     input_ids = bert_inputs['input_ids']
-    token_type_ids = bert_inputs['token_type_ids']
     attention_mask = bert_inputs['attention_mask']
+    token_type_ids = bert_inputs['token_type_ids']
 
     """ne sert à rien : bert_inp_tot = [
         (input_ids[i], token_type_ids[i], attention_mask[i])
@@ -1140,11 +1140,11 @@ def encode_sentences_with_bert(
 
     # stack the input arrays
     input_ids = np.stack(input_ids)
-    token_type_ids = np.stack(token_type_ids)
     attention_mask = np.stack(attention_mask)
+    token_type_ids = np.stack(token_type_ids)
 
     # Return the encoded inputs
-    return input_ids, token_type_ids, attention_mask  #, bert_inp_tot
+    return input_ids, attention_mask, token_type_ids  #, bert_inp_tot
 
 
 """
@@ -1190,15 +1190,15 @@ def extract_bert_sentence_embeddings(
         Tuple of sentence embeddings and the concatenated hidden states
         of the BERT model.
     """
-    bert_tokenizer = AutoTokenizer.from_pretrained(model_type)
+    # bert_tokenizer = AutoTokenizer.from_pretrained(model_type)
     
     (
         input_ids,
-        token_type_ids,
         attention_mask,
-        bert_inp_tot
-    ) = encode_sentences_with_bert(
-        sents, bert_tokenizer, max_length
+        token_type_ids,
+        # bert_inp_tot
+    ) = encode_corpus_with_bert(
+        sents, max_length   # , bert_tokenizer
     )
 
     # Bert HuggingFace
@@ -1221,7 +1221,7 @@ def extract_bert_sentence_embeddings(
 
     bert_features = np.array(last_hidden_states).mean(axis=1)
 
-    return bert_features, bert_inp_tot
+    return bert_features#, bert_inp_tot
 
 
 """ USE

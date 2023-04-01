@@ -497,15 +497,17 @@ def print_file_size(file_path: str) -> None:
 """
 
 
-def get_start_time() -> float:
-    r"""Return the current time.
+"""def get_start_time() -> float:
+    r""DEPRECATED, use `time.time` instead
+
+    Return the current time.
 
     Returns
     -------
     float
         The current time.
-    """
-    return time.time()
+    ""
+    return time.time()"""
 
 
 def pretty_timedelta_str(dt: float, n_significant: int = 3) -> str:

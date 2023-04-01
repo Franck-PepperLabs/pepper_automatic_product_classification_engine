@@ -1,10 +1,77 @@
 from typing import *
-from pepper_utils import print_subtitle
+from pepper_utils import print_subtitle, bold
 from flipkart_utils import get_class_label_name_map
 from sklearn import metrics
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+from sklearn.metrics import (
+    precision_score,
+    recall_score,
+    f1_score,
+    fbeta_score,
+    jaccard_score,
+    accuracy_score
+)
+
+
+
+def get_similarity_score_fn_dict():
+    # For each of them, the best is 1 en the worst is 0
+    return {
+        "precision": precision_score,
+        "recall": recall_score,
+        "f1": f1_score,
+        "fbeta_5 (↑ recall)": lambda *args, **kwargs: fbeta_score(beta=5, *args, **kwargs),
+        "fbeta_1_5 (↑ prec)": lambda *args, **kwargs: fbeta_score(beta=1/5, *args, **kwargs),
+        "jaccard": jaccard_score,
+    }
+
+
+def global_similarity_report(cla_labels, clu_labels, indent=0):
+    print_subtitle("Global similarity report")
+
+    score_funcs = get_similarity_score_fn_dict()  # Best is 1, worst is 0
+    averages = ['micro', 'macro']  # Note: weighted not yet included
+
+    # Simple base accuracy
+    print(
+        f"{(indent + 19) * ' '}accuracy: "
+        f"{accuracy_score(cla_labels, clu_labels, normalize=False)}"
+    )
+    print(
+        f"{(indent + 8) * ' '}normalized accuracy: "
+        f"{accuracy_score(cla_labels, clu_labels):.2f}"
+    )
+
+    # Global scores (all classes are taken into account)
+    for score_name, score_func in score_funcs.items():
+        for avg in averages:
+            score = score_func(cla_labels, clu_labels, average=avg)
+            print(
+                f"{(indent + 21 - len(score_name)) * ' '}"
+                f"{score_name} {avg[:5]}: {score:.2f}"
+            )
+
+
+def local_similarity_report(cla_labels, clu_labels, indent=0):
+    print_subtitle("Local similarity report")
+    
+    score_funcs = get_similarity_score_fn_dict()  # Best is 1, worst is 0
+    labels = list(set(cla_labels))
+
+    print(
+        f"{(indent + 18 - 8) * ' '}{bold('class_id')}: "
+        f"{', '.join([f'C_{i:02d}' for i in range(len(labels))])}"
+    )
+    for score_name, score_func in score_funcs.items():
+        # labels=[label] filters on a unique label
+        scores = [
+            score_func(cla_labels, clu_labels, labels=[label], average="macro")
+            for label in labels
+        ]
+        print(f"{(indent + 18 - len(score_name)) * ' '}{score_name}: "
+                f"{', '.join([f'{score:.2f}' for score in scores])}")
 
 
 def show_confusion_matrix(
@@ -68,8 +135,11 @@ def display_classification_report(cla_labels: list, clu_labels: list) -> None:
     -------
     None
     """
+    cla_names = list(get_class_label_name_map().values())
     print_subtitle("Classification report")
-    print(metrics.classification_report(cla_labels, clu_labels))
+    print(metrics.classification_report(
+        cla_labels, clu_labels, target_names=cla_names
+    ))
 
 
 def show_multilabel_confusion_matrixes(

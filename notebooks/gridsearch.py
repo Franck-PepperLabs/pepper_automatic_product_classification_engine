@@ -267,7 +267,8 @@ def flipkart_gridsearch(
     corpus_name: str,
     ex_params_name: str,
     ex_param_domain_defs: Dict[str, Tuple[type, int, int, int, bool]],
-    verbosity: int = 0
+    verbosity: int = 0,
+    include_fixed: Optional[List[str]] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     r"""Performs a grid search on a subset of the parameters of the
     `ex_params_name` parameter of the `pipeline` function for the `corpus_name`
@@ -326,6 +327,9 @@ def flipkart_gridsearch(
     >>> display(gridsearch_data)
     >>> display("Fixed params:", fixed_params)
     """
+    if include_fixed is None:
+        include_fixed = []
+
     # Get the corpus and class labels for the specified dataset
     corpus, cla_labels = corpora[corpus_name]
 
@@ -340,7 +344,7 @@ def flipkart_gridsearch(
     fixed_params = {}
     variable_param_names = []
     for param_name, param_domain in zip(param_names, param_domains):
-        if len(param_domain) == 1:
+        if len(param_domain) == 1 and param_name not in include_fixed:
             fixed_params[param_name] = param_domain[0]
         else:
             variable_param_names.append(param_name)
