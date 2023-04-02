@@ -39,7 +39,8 @@ from pepper_utils import (
     format_iB,
     # get_start_time, depr
     print_time_perf,
-    save_and_show
+    # clean_filename,
+    save_and_show,
 )
 
 """ Dir scanning
@@ -636,7 +637,7 @@ def show_gray_imx(gray_imx):
     plt.show()
 
 
-def show_imxs_gallery(imxs, ids, cmap=None):
+def show_imxs_gallery(imxs, ids, title=None, cmap=None):
     n_imxs = len(imxs)
     n_cols = 4
     n_rows = math.ceil(n_imxs / n_cols)
@@ -651,10 +652,13 @@ def show_imxs_gallery(imxs, ids, cmap=None):
     for i in range(n_imxs, n_rows * n_cols):
             ax[i].set_axis_off()        
 
+    if title:
+        plt.suptitle(title, fontsize=15, weight="bold")
+
     plt.tight_layout()
     #plt.show()
-
-    save_and_show(f"gallery_{len(ids)}", sub_dir="im_prep")
+    im_title = ("_" + title.replace(" ", "_").lower()) if title else ""
+    save_and_show(f"gallery_{len(ids)}{im_title}", sub_dir="im_prep")
 
 
 
@@ -736,8 +740,8 @@ def advanced_show_imx(
     if fig:
         # plt.show()
         if title is None:
-            title = "Jane DOE"
-        save_and_show(f"imx_{title.lower()}", sub_dir="im_prep")
+            title = "Jane_DOE"
+        save_and_show(f"imx_{title}", sub_dir="im_prep")
 
 
 """ SKImage
@@ -787,15 +791,53 @@ def load_the_pillow(subdir="0_src/"):
 
 
 def pipeline_step(
-        locate_dir_f,
-        transform_f=None,
-        extract_f=None,
-        input_subdir=None,
-        output_subdir=None,
-        input_cache=None,
-        output_state=None,
-        block_slice=None
-):    
+        locate_dir_f: Callable[[Optional[str]], str],
+        transform_f: Optional[
+            Callable[[Union[str, Tuple[int, int, int]]],
+            Union[str, Tuple[int, int, int]]]] = None,
+        extract_f: Optional[Callable[[str], Tuple]] = None,
+        input_subdir: Optional[str] = None,
+        output_subdir: Optional[str] = None,
+        input_cache: Optional[Tuple] = None,
+        output_state: Optional[str] = None,
+        block_slice: Optional[Union[int, slice]] = None
+) -> Tuple:
+    """
+    Apply a step in a pipeline that transforms or extracts images from a
+    directory.
+    
+    Parameters:
+    -----------
+    locate_dir_f : Callable[[Optional[str]], str]
+        A function that locates the directory where images are stored.
+    transform_f : Optional[Callable[[Union[str, Tuple[int, int, int]]], Union[str, Tuple[int, int, int]]]]
+        A function that transforms images. If None, no transformation is applied.
+    extract_f : Optional[Callable[[str], Tuple]]
+        A function that extracts information from images.
+        If None, no extraction is applied.
+    input_subdir : Optional[str]
+        The input subdirectory where the images are located.
+        If input_cache is not None, this parameter is ignored.
+    output_subdir : Optional[str]
+        The output subdirectory where the transformed images will be saved.
+        If None, no saving is performed.
+    input_cache : Optional[Tuple]
+        A tuple containing the input images, ids, and filenames to be processed.
+        If not None, this is used instead of 
+        loading the images from disk.
+    output_state : Optional[str]
+        A description of the output state (e.g. "transformed", "extracted").
+        If None, defaults to "transformed".
+    block_slice : Optional[Union[int, slice]]
+        A slice or integer indicating which block of images to process.
+        If None, all images are processed.
+    
+    Returns:
+    --------
+    Tuple
+        A tuple containing the extracted information (if extract_f is not None),
+        the transformed images, ids, and filenames.
+    """    
     start_time = time.time()  # get_start_time()
 
     if input_subdir is None and input_cache is None:
@@ -2033,12 +2075,21 @@ def load_images_and_ids(images_dir: str) -> Tuple[np.ndarray, np.ndarray]:
         A tuple containing numpy arrays of images and ids.
     """
     filenames, ids = get_file_names_and_ids(images_dir)
+
+    # patch rapide du 02/04/2023 (avant soutenance), mais peut mieux faire
+    # notamment en exploitant le filtre d'extension du scandir
+    x_filenames = [fn for fn in filenames if not fn.endswith(".jpg")]
+    if x_filenames:
+        filenames = [fn for fn in filenames if fn not in x_filenames]
+        ids = [id for fn, id in zip(filenames, ids) if  fn not in x_filenames]
+
     if len(filenames) == 0:
         print(f"Empty folder case ({images_dir}) : pass")
         return None, None
     if len(filenames) == 1:
         print(f"NPZ case ({images_dir}) : for now, pass")
         return None, None
+
     imxs_imgs_zip = for_all(_load_image_pil_open, filenames, const_args=images_dir)
     imgs = imxs_imgs_zip[1]
     return imgs, ids

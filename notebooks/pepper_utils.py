@@ -1,5 +1,5 @@
 from typing import *
-import os, time
+import os, time, re
 from sys import getsizeof
 from datetime import datetime, timedelta
 from itertools import zip_longest
@@ -77,8 +77,25 @@ def print_subsubtitle(txt: str) -> None:
 """ Plot
 """
 
+def clean_filename(filename: str) -> str:
+    """
+    Remove all characters that are not allowed in a filename from the input string.
+
+    Parameters
+    ----------
+    filename : str
+        The string to be cleaned.
+
+    Returns
+    -------
+    str
+        The cleaned string.
+    """
+    return re.sub(r"[^\w\s-]", "", filename).replace(" ", "_").strip().lower()
+
 
 def save_and_show(file_name, sub_dir=None, file_ext="png", timestamp=True):
+    file_name = clean_filename(file_name)
     root_dir = "../img/"
     sub_dir = sub_dir if sub_dir else ""
     if len(sub_dir) > 0 and sub_dir[-1] != "/":
@@ -90,6 +107,7 @@ def save_and_show(file_name, sub_dir=None, file_ext="png", timestamp=True):
         file_ext = "." + file_ext
     if timestamp:
         file_name += datetime.now().strftime("_%Y_%m_%d_%H_%M_%S_%f")
+    print(f"save_and_show_savefig({dir}{file_name}{file_ext})")
     plt.savefig(
         f'{dir}{file_name}{file_ext}',
         facecolor='white',
