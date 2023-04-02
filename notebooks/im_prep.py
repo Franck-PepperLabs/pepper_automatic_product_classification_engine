@@ -1986,15 +1986,21 @@ def images_descriptions_data(
         the row and column positions of each keypoint, and one column for each
         descriptor dimension.
     """
+    # ISSUE 02/04/2023 (on Sample8/BRIEF) : filtrer d'abord sur les cas None ou vide
+    # évidemment, il faut préserver l'alignement entre kpts et ids
     id_rep = get_id_rep(ids, kpts)
-    kpts_stacked = np.vstack([kpt for kpt in kpts if kpt is not None])
+    kpts_stacked = np.vstack(
+        [kpt for kpt in kpts if kpt is not None and len(kpt)]
+    )
     kpts_data = pd.DataFrame(kpts_stacked, index=id_rep).astype(dtype=int)
     kpts_data.index.names = ['id']
     kpts_data.columns = ['y', 'x']
     if descs is None:
         return kpts_data
     else:
-        descs_stacked = np.vstack([desc for desc in descs if desc is not None])
+        descs_stacked = np.vstack(
+            [desc for desc in descs if desc is not None and len(desc)]
+        )
         descs_data = pd.DataFrame(descs_stacked, index=id_rep)
         descs_data.index.names = ['id']
         descs_data.columns = [str(i) for i in range(descs[0].shape[1])]
